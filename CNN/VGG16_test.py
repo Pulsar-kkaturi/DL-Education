@@ -100,6 +100,8 @@ model.summary()
 ###############
 # Train Model #
 ###############
-model.compile(loss=losses.CategoricalCrossentropy(), optimizer=optimizers.Adam(lr=1e-4), metrics=['accuracy'])
-history = model.fit(x_train1, y_train1, epochs=20, batch_size=32,
-                    validation_data=(x_test1, y_test1), shuffle=True)
+os.environ['CUDA_VISIBLE_DEVICES'] = '1,2,3'
+strategy = tf.distribute.MirroredStrategy()
+with strategy.scope():
+    model.compile(loss=losses.CategoricalCrossentropy(), optimizer=optimizers.Adam(lr=1e-4), metrics=['accuracy'])
+    history = model.fit(x_train1, y_train1, epochs=20, batch_size=32, validation_data=(x_test1, y_test1), shuffle=True)

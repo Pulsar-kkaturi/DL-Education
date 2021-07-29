@@ -95,7 +95,7 @@ block5 = conv_block_2d(block4, 3, [512, 3, 'relu', 2, None])
 dens = output_block(block5, 1, [256], None, 'relu', 0.5)
 outputs = layers.Dense(10, activation='softmax')(dens)
 model = Model(inputs, outputs)
-# print(model.summary())
+model.summary()
 
 ###############
 # Train Model #

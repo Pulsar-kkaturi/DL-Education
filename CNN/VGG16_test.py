@@ -21,7 +21,7 @@ from tensorflow.keras import utils
 ################
 # 2. Data Load #
 ################
-tf.debugging.set_log_device_placement(True)
+# tf.debugging.set_log_device_placement(True)
 (x_train, y_train), (x_test, y_test)=keras.datasets.mnist.load_data(path='minist.npz')
 print(x_train.shape, y_train.shape)
 

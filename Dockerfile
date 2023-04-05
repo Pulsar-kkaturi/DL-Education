@@ -17,12 +17,12 @@ RUN service ssh start
 RUN adduser student
 #RUN groupadd -g ${GROUP_ID} lungteam
 #RUN useradd -u ${USER_ID} -g lungteam -p $(openssl passwd -1 vuno2018) vuno
-RUN echo "bbl ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+RUN echo "student ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 USER student
 WORKDIR /home/student
 
 # Python Setting
-ENV PATH="/home/bbl/.local/bin:${PATH}"
+ENV PATH="/home/student/.local/bin:${PATH}"
 RUN sudo ln -s /usr/bin/python3 /usr/bin/python
 RUN sudo cp /usr/local/bin/pip* /usr/bin/.
 ENV PYTHONPATH "/home/student/Projects:${PYTHONPATH}"

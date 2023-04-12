@@ -26,9 +26,10 @@ by Jonghun Jeong
 "파이썬 실습 노트"
 * Reference: 박응용, 위키독스, https://wikidocs.net/book/1
 
-### 2.2. Special Lecture
+### 2.2. VisionDL Lecture
 "비전 딥러닝 특강"
 * 강의노트: https://pulsar-kkaturi.tistory.com/category/%EA%B5%90%EC%9C%A1%20%EB%A6%AC%EB%B7%B0/%EB%B9%84%EC%A0%84%20%EB%94%A5%EB%9F%AC%EB%8B%9D%20%ED%8A%B9%EA%B0%95
+* Reference: 최건호, 한빛미디어, 2019년 06월 07일, 파이토치 첫걸음
 * Reference: 프랑소와 숄레, 길벗, 2018년 10월 22일, 케라스 창시자에게 배우는 딥러닝
 
 ---

@@ -7,6 +7,7 @@ import skimage, h5py, logging, argparse
 from tqdm import tqdm
 from skimage import io as skio
 from skimage import transform as skit
+from skimage import filters as skif
 
 import tensorflow as tf
 from tensorflow import keras as tfk
@@ -143,25 +144,11 @@ class CLS_Keras():
         strategy = tf.distribute.MirroredStrategy()
         with strategy.scope():
             # Model Build
-            if self.params['model_name'] == 'vgg16':
-                conv_base = tfk.applications.VGG16(input_shape=self.params['input_size'], include_top=False, pooling='avg', weights=None)
-            elif self.params['model_name'] == 'vgg19':
-                conv_base = tfk.applications.VGG19(input_shape=self.params['input_size'], include_top=False, pooling='avg', weights=None)
-            elif self.params['model_name'] == 'resnet50':
-                conv_base = tfk.applications.ResNet50V2(input_shape=self.params['input_size'], include_top=False, pooling='avg', weights=None)
-            elif self.params['model_name'] == 'resnet152':
-                conv_base = tfk.applications.ResNet152V2(input_shape=self.params['input_size'], include_top=False, pooling='avg', weights=None)
-            else:
-                print('!ERROR! please insert correct model name! (vgg16, vgg19, resnet50)')
-            input = conv_base.input
-            dense = tfk.layers.Dropout(self.params['drop_rate'])(conv_base.output)
-            for d in self.params['dens_filters']:
-                dense = tfk.layers.Dense(d, activation=None)(dense)
-                dense = tfk.layers.BatchNormalization()(dense)
-                dense = tfk.layers.Activation('relu')(dense)
-                dense = tfk.layers.Dropout(self.params['drop_rate'])(dense)
-            output = tfk.layers.Dense(len(label_list), activation='softmax')(dense)
-            model = tfk.Model(input, output)
+            model = self._model_build(self.params['model_name'], 
+                                      self.params['input_size'],
+                                      self.params['dens_filters'],
+                                      self.params['drop_rate'],
+                                      len(label_list))
             model.summary(print_fn=logger.info)
 
             # Model Compile
@@ -196,6 +183,99 @@ class CLS_Keras():
                 config_dic['Value'].append(self.params[k])
             df_config = pd.DataFrame(config_dic)
             df_config.to_csv(os.path.join(doc_path, log_name + '_config.csv'), index=False)
+
+    def test_cls(self, input_path, output_path):
+        output_path = output_path + f'_{self.params["model_name"]}'
+        # Log Setting
+        log_name = 'Test_{}_{}'.format(os.path.basename(output_path), time.strftime('%Y%m%d_%H%M', time.localtime(time.time())))
+        log_path = os.path.join(output_path, 'log')
+        os.makedirs(log_path, exist_ok=True)
+        logger = self._logger_setting(log_path, log_name)
+        logger.info('### Test CLS ###')
+
+        # Tensor loading
+        test_paths, label_list = [], []
+        for i_ in sorted(os.listdir(os.path.join(input_path, 'test'))):
+            file_path = os.path.join(input_path, 'test', i_)
+            file_label = i_.split('_')[-2]
+            test_paths.append(file_path)
+            label_list.append(file_label)
+        label_list = list(sorted(set(label_list)))
+        logger.info(f' - Label = {label_list}')
+        logger.info(f' - Train Number = {len(test_paths)}')
+
+        # GPU Setting
+        tf.random.set_seed(self.params['seed'])
+        strategy = tf.distribute.MirroredStrategy()
+        with strategy.scope():
+            # Model Build
+            model = self._model_build(self.params['model_name'], 
+                                      self.params['input_size'],
+                                      self.params['dens_filters'],
+                                      self.params['drop_rate'],
+                                      len(label_list))
+            model.summary(print_fn=logger.info)
+
+        # csv loading
+        df_test = pd.read_csv(os.path.join(input_path, 'test_info_dic.csv'))
+        result_dic = {'name': list(df_test['name']),
+                      'org_name': list(df_test['org_name']),
+                      'label': list(df_test['class']),
+                      'prediction': []}
+        for k in label_list:
+            result_dic[f'prob_{k}'] = []
+        logger.info(f' - info Keys: {result_dic.keys()}')
+        
+        # Prediction
+        doc_path = os.path.join(output_path, 'doc')
+        result_path = os.path.join(output_path, 'result')
+        os.makedirs(result_path, exist_ok=True)
+        model.load_weights(os.path.join(output_path, 'model.h5'))
+        proc_num = 0
+        for b in tqdm(range(len(test_paths)//self.params['batch_size'])):
+            if b < len(test_paths)//self.params['batch_size'] -1:
+                test_batchs = test_paths[b*self.params['batch_size']:(b+1)*self.params['batch_size']]
+            else:
+                test_batchs = test_paths[b*self.params['batch_size']:]
+            pred_results = model.predict(TensorSequence(test_batchs, 
+                                                        self.params['batch_size'], 
+                                                        label_list, 
+                                                        train=False,
+                                                        shuffle=False),
+                                         verbose=0)
+            # Result Save
+            for i in range(pred_results.shape[0]):
+                pred = label_list[list(pred_results[i]).index(np.max(pred_results[i]))]
+                label = result_dic['label'][proc_num+i]
+                # figure save
+                correct = 'True' if pred == label else 'False'
+                img = skio.imread(test_batchs[i])
+                img = np.expand_dims(img, axis=0)
+                # gradcam
+                heatmap1 = self._make_gradcam_heatmap(img, model, 'conv4_block6_out',['post_relu','avg_pool'])
+                heatmap2 = self._make_gradcam_heatmap(img, model, 'conv5_block3_out',['post_relu','avg_pool'])
+                hm1 = skit.resize(heatmap1, self.params['input_size'][:-1], anti_aliasing=True)
+                hm1 = skif.gaussian(hm1, sigma=3)
+                hm2 = skit.resize(heatmap2, self.params['input_size'][:-1], anti_aliasing=True)
+                hm2 = skif.gaussian(hm2, sigma=3)
+                hmn = (hm1+hm2)/2
+                heatmap_n = np.uint8(255 * hmn)
+                plt.figure(figsize=(8,8))
+                plt.imshow(img[0])
+                plt.imshow(heatmap_n, alpha=0.5)
+                plt.title(f'{correct}: ({label}:{pred})', fontsize=10)
+                plt.savefig(os.path.join(result_path, f'{result_dic["name"][proc_num+i]}_{correct}.png'))
+                # Dict
+                result_dic['prediction'].append(pred)
+                for j, j_ in enumerate(label_list):
+                    result_dic[f'prob_{j_}'].append(pred_results[i][j])
+            # Log
+            proc_num += len(test_batchs)
+            logger.info(f' => ({proc_num}/{len(test_paths)}). Inference prediction shape = {pred_results.shape}')
+            
+        # CSV Saving
+        df_result = pd.DataFrame(result_dic)
+        df_result.to_csv(os.path.join(doc_path, f'{log_name}_test.csv'))
 
 
     def _gpu_check(self):
@@ -319,6 +399,69 @@ class CLS_Keras():
         plt.legend(fontsize=15)
         plt.savefig(os.path.join(history_save_path, log_name + '_learning_fig.png'))
 
+    def _model_build(self, model_name, input_size, dens_filters, drop_rate, output_num):
+        # Model Build
+        if model_name == 'vgg16':
+            conv_base = tfk.applications.VGG16(input_shape=input_size, include_top=False, pooling='avg', weights=None)
+        elif model_name == 'vgg19':
+            conv_base = tfk.applications.VGG19(input_shape=input_size, include_top=False, pooling='avg', weights=None)
+        elif model_name == 'resnet50':
+            conv_base = tfk.applications.ResNet50V2(input_shape=input_size, include_top=False, pooling='avg', weights=None)
+        elif model_name == 'resnet152':
+            conv_base = tfk.applications.ResNet152V2(input_shape=input_size, include_top=False, pooling='avg', weights=None)
+        else:
+            print('!ERROR! please insert correct model name! (vgg16, vgg19, resnet50)')
+        input = conv_base.input
+        dense = tfk.layers.Dropout(drop_rate)(conv_base.output)
+        for d in dens_filters:
+            dense = tfk.layers.Dense(d, activation=None)(dense)
+            dense = tfk.layers.BatchNormalization()(dense)
+            dense = tfk.layers.Activation('relu')(dense)
+            dense = tfk.layers.Dropout(drop_rate)(dense)
+        output = tfk.layers.Dense(output_num, activation='softmax')(dense)
+        return tfk.Model(input, output)
+    
+    def _make_gradcam_heatmap(self, img_array, model, last_conv_layer_name, classifier_layer_names):
+        # 1. 먼저 모델에서 마지막 컨브넷층을 output으로 하고, 테스트 이미지를 input으로 하는 모델을 구성한다.
+        last_conv_layer = model.get_layer(last_conv_layer_name)
+        last_conv_layer_model = tfk.Model(model.inputs, last_conv_layer.output)
+
+        # 2. 마지막 컨브넷층과 최종 예측결과를 인아웃으로 받는 모델을 구성한다.
+        classifier_input = tfk.Input(shape=last_conv_layer.output.shape[1:])
+        x = classifier_input
+        for layer_name in classifier_layer_names:
+            x = model.get_layer(layer_name)(x)
+        classifier_model = tfk.Model(classifier_input, x)
+
+        # 그다음, 테스트 이미지에 대한 가장 높은 예측 클래스와 마지막 컨브넷층에 대한 그래디언트를 구한다.
+        with tf.GradientTape() as tape:
+            # 최종 컨브넷층의 결과 추출
+            last_conv_layer_output = last_conv_layer_model(img_array)
+            tape.watch(last_conv_layer_output)
+            # 예측 클래스 계산
+            preds = classifier_model(last_conv_layer_output)
+            top_pred_index = tf.argmax(preds[0])
+            top_class_channel = preds[:, top_pred_index]
+
+        # 마지막 컨브넷층의 특성맵에 대한 가장 높은 예측 클래스의 그래디언트.
+        grads = tape.gradient(top_class_channel, last_conv_layer_output)
+
+        # 특성 맵 채널별 그래디언트 평균 값이 담긴 (512,) 크기의 벡터.
+        pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+
+        # 가장 높은 예측 클래스에 대한 "채널의 중요도"를 특성 맵 배열의 채널에 곱한다.
+        last_conv_layer_output = last_conv_layer_output.numpy()[0]
+        pooled_grads = pooled_grads.numpy()
+        for i in range(pooled_grads.shape[-1]):
+            last_conv_layer_output[:, :, i] *= pooled_grads[i]
+
+        # 만들어진 특성 맵에서 채널 축을 따라 평균한 값이 클래스 활성화의 히트맵.
+        heatmap = np.mean(last_conv_layer_output, axis=-1)
+
+        # 마지막으로 구해진 히트맵을 0 ~ 1 사이값으로 정규화
+        heatmap = np.maximum(heatmap, 0) / np.max(heatmap)
+        return heatmap
+
 
 
     
@@ -343,8 +486,8 @@ if __name__ == '__main__':
     parser.add_argument('--base_path', type=str, default='/home/student/Datasets/jhjeong/VUNO', help='Base PATH')
     parser.add_argument('-g', '--gpu', type=str, default='0,1', help='GPU Number')
     parser.add_argument('-t', '--title', type=str, default='fruit_veg', help='Dataset Title')
-    parser.add_argument('-p', '--process', type=str, default='train', help='Process Mode = prep,train,test')
-    parser.add_argument('--model', type=str, default='vgg16', help='Model Name (vgg16, vgg19, resnet50)')
+    parser.add_argument('-p', '--process', type=str, default='test', help='Process Mode = prep,train,test')
+    parser.add_argument('--model', type=str, default='resnet152', help='Model Name (vgg16, vgg19, resnet50)')
     args = parser.parse_args()
     print("### args = ", args)
 
@@ -359,5 +502,7 @@ if __name__ == '__main__':
             run_cls.preprocessing(os.path.join(args.base_path, 'raw_data', args.title), os.path.join(args.base_path, 'prep_data', args.title))
         elif p == 'train':
             run_cls.train_cls(os.path.join(args.base_path, 'prep_data', args.title), os.path.join(args.base_path, 'post_data', args.title))
+        elif p == 'test':
+            run_cls.test_cls(os.path.join(args.base_path, 'prep_data', args.title), os.path.join(args.base_path, 'post_data', args.title))
         else:
             pass

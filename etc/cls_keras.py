@@ -54,7 +54,6 @@ class TensorSequence(tf.keras.utils.Sequence):
       else:
           return np.array(batch_x, dtype=np.float32)
 
-
 class CLS_Keras():
     def __init__(self, params) -> None:
         self.params = params
@@ -356,8 +355,6 @@ class CLS_Keras():
     def optim_build(self, mode, lr=0.01):
         if mode == 'adam':
             return tfk.optimizers.Adam(learning_rate=lr)
-        elif mode == 'adamw':
-            return tfk.optimizers.AdamW(learning_rate=lr)
         elif mode == 'rmsprop':
             return tfk.optimizers.RMSprop(learning_rate=lr)
         

@@ -11,13 +11,12 @@ by Jonghun Jeong
 
 ### 1.1. Author
 * Main Developer: Jonghun Jeong
-* Institution: Vuno Inc.
-    - Medical Imaging Group
-    - BLU3 (Brain & LUng 3D) Team
-    - Position: Researcher
-* Institution: SNU GSCST Dept. of Applied Bioengineering
-    - Laboratory: BBL (Bioimaging and Biophotonics Laboratory)
-    - Position: PhD Course Student
+* Institution: Hanwha Systems.
+    - Value Creation Division
+    - AI Business Team
+    - Position: Computer Vision AI Engineer
+* Institution: Seoul National University
+    - Major: Applied Bioengineering
     - Research Interests: Application of deep learning to Optical Microscopy
 
 ---
@@ -28,7 +27,7 @@ by Jonghun Jeong
 
 ### 2.2. VisionDL Lecture
 "비전 딥러닝 특강"
-* 강의노트: https://pulsar-kkaturi.tistory.com/category/%EA%B5%90%EC%9C%A1%20%EB%A6%AC%EB%B7%B0/%EB%B9%84%EC%A0%84%20%EB%94%A5%EB%9F%AC%EB%8B%9D%20%ED%8A%B9%EA%B0%95
+* 강의노트: https://brunch.co.kr/brunchbook/vision-deep
 * Reference: 최건호, 한빛미디어, 2019년 06월 07일, 파이토치 첫걸음
 * Reference: 프랑소와 숄레, 길벗, 2018년 10월 22일, 케라스 창시자에게 배우는 딥러닝
 
@@ -44,3 +43,8 @@ by Jonghun Jeong
         bash .docker.sh {DATA_PATH} run # 도커 실행
 
 * requirements.txt: python library list
+
+**Colab 실행 시에는 도커 세팅 불필요!**
+
+### 3.2. Colaboratory
+

@@ -35,4 +35,6 @@ RUN pip3 install pydicom SimpleITK
 COPY --chown=student:student requirements.txt .
 # RUN pip3 install -r requirements.txt
 RUN sh -c "$(wget -O- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+RUN echo 'exec zsh' >> ~/.bashrc && \
+    echo 'exec zsh' >> ~/.profile
 RUN zsh
